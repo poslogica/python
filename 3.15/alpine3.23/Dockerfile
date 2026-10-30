@@ -9,6 +9,15 @@ FROM alpine:3.23
 # ensure local python is preferred over distribution python
 ENV PATH /usr/local/bin:$PATH
 
+# cannot remove LANG even though https://bugs.python.org/issue19846 is fixed
+# - embedded interpreters (uWSGI, mod_wsgi, etc) skip locale coercion and UTF-8 mode before Python 3.15, so they fall back to ASCII
+# - musl (alpine) never gets LC_CTYPE set, so anything that reads locale environment variables (babel) finds none
+# last attempted removal of LANG broke many users:
+# https://github.com/docker-library/python/pull/570
+# embedded interpreter reproducer (fails with UnicodeEncodeError without LANG on 3.14 and earlier, needs a non-slim Debian variant for gcc):
+# docker run --rm --env LANG= python:3.15 sh -c 'printf "#include <Python.h>\nint main(){Py_Initialize();PyRun_SimpleString(\"print(chr(252),flush=True)\");}" | gcc -x c - $(python3-config --embed --cflags --ldflags) && ./a.out'
+ENV LANG C.UTF-8
+
 # runtime dependencies
 RUN set -eux; \
 	apk add --no-cache \
@@ -16,8 +25,8 @@ RUN set -eux; \
 		tzdata \
 	;
 
-ENV PYTHON_VERSION 3.15.0
-ENV PYTHON_SHA256 ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575
+ENV PYTHON_VERSION 3.15.2
+ENV PYTHON_SHA256 8b5536d280142ecf6cdfe15d12a21ba1c65e300bbf7b28a8d0cdb849575797de
 
 RUN set -eux; \
 	\
